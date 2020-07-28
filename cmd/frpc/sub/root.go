@@ -74,6 +74,8 @@ var (
 	kcpDoneCh chan struct{}
 )
 
+var frpcCallBack1 client.FRPCCallback
+
 func init() {
 	rootCmd.PersistentFlags().StringVarP(&cfgFile, "config", "c", "./frpc.ini", "config file of frpc")
 	rootCmd.PersistentFlags().BoolVarP(&showVersion, "version", "v", false, "version of frpc")
@@ -90,8 +92,8 @@ var rootCmd = &cobra.Command{
 			return nil
 		}
 
-		// Do not show command usage here.
-		err := RunClient(cfgFile)
+		//Do not show command usage here.
+		err := RunClient(cfgFile, frpcCallBack1)
 		if err != nil {
 			fmt.Println(err)
 			os.Exit(1)
@@ -100,7 +102,8 @@ var rootCmd = &cobra.Command{
 	},
 }
 
-func Execute() {
+func Execute(frpcCallBack client.FRPCCallback) {
+	frpcCallBack1 = frpcCallBack
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
 	}
@@ -175,8 +178,8 @@ func parseClientCommonCfgFromCmd() (cfg config.ClientCommonConf, err error) {
 
 	return
 }
-
-func RunClient(cfgFilePath string) (err error) {
+func RunClient(cfgFilePath string, frpcCallBack client.FRPCCallback) (err error) {
+	frpcCallBack1 = frpcCallBack
 	var content string
 	content, err = config.GetRenderedConfFromFile(cfgFilePath)
 	if err != nil {
@@ -225,7 +228,7 @@ func startService(cfg config.ClientCommonConf, pxyCfgs map[string]config.ProxyCo
 		go handleSignal(svr)
 	}
 
-	err = svr.Run()
+	err = svr.Run(frpcCallBack1)
 	if cfg.Protocol == "kcp" {
 		<-kcpDoneCh
 	}

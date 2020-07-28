@@ -16,6 +16,7 @@ package frpclib
 
 import (
 	"math/rand"
+	"os"
 	"time"
 
 	_ "github.com/fatedier/frp/assets/frpc/statik"
@@ -24,30 +25,39 @@ import (
 	"github.com/fatedier/golib/crypto"
 )
 
-func main() {
-	crypto.DefaultSalt = "frp"
-	rand.Seed(time.Now().UnixNano())
-
-	sub.Execute()
+type JniMember struct {
+	callback Callback
 }
 
-func Run(cfgFilePath string) {
-	crypto.DefaultSalt = "frp"
-	rand.Seed(time.Now().UnixNano())
+var jniMember JniMember
 
-	sub.RunClient(cfgFilePath)
-}
+//func main() {
+//	crypto.DefaultSalt = "frp"
+//	rand.Seed(time.Now().UnixNano())
+//	jniMember.callback = new(JniMember)
+//	sub.Execute(&jniMember)
+//}
+//
+//func (ac *JniMember) CallByGo() {
+//	log.Println("````````````")
+//}
 
 type Callback interface {
 	CallByGo()
 }
 
-var callback Callback
-
-func SetCallBack(c Callback) {
-	callback = c
+func (ac *JniMember) SendCallByGo() {
+	ac.callback.CallByGo()
 }
 
-func SendCallByGo() {
-	callback.CallByGo()
+func Run(cfgFilePath string, c Callback) {
+	crypto.DefaultSalt = "frp"
+	rand.Seed(time.Now().UnixNano())
+
+	jniMember.callback = c
+	sub.RunClient(cfgFilePath, &jniMember)
+}
+
+func Stop() {
+	os.Exit(1)
 }

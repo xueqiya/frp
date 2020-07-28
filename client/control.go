@@ -18,7 +18,6 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	frpclib "github.com/fatedier/frp/cmd/frpc"
 	"io"
 	"net"
 	"runtime/debug"
@@ -87,6 +86,12 @@ type Control struct {
 
 	// sets authentication based on selected method
 	authSetter auth.Setter
+
+	callBack FRPCCallback
+}
+
+type FRPCCallback interface {
+	SendCallByGo()
 }
 
 func NewControl(ctx context.Context, runId string, conn net.Conn, session *fmux.Session,
@@ -122,8 +127,8 @@ func NewControl(ctx context.Context, runId string, conn net.Conn, session *fmux.
 	return ctl
 }
 
-func (ctl *Control) Run() {
-	go ctl.worker()
+func (ctl *Control) Run(frpcCallBack FRPCCallback) {
+	go ctl.worker(frpcCallBack)
 
 	// start all proxies
 	ctl.pm.Reload(ctl.pxyCfgs)
@@ -169,7 +174,7 @@ func (ctl *Control) HandleReqWorkConn(inMsg *msg.ReqWorkConn) {
 	ctl.pm.HandleWorkConn(startMsg.ProxyName, workConn, &startMsg)
 }
 
-func (ctl *Control) HandleNewProxyResp(inMsg *msg.NewProxyResp) {
+func (ctl *Control) HandleNewProxyResp(inMsg *msg.NewProxyResp, frpcCallBack FRPCCallback) {
 	xl := ctl.xl
 	// Server will return NewProxyResp message to each NewProxy message.
 	// Start a new proxy handler if no error got
@@ -177,7 +182,7 @@ func (ctl *Control) HandleNewProxyResp(inMsg *msg.NewProxyResp) {
 	if err != nil {
 		xl.Warn("[%s] start error: %v", inMsg.ProxyName, err)
 	} else {
-		frpclib.SendCallByGo()
+		frpcCallBack.SendCallByGo()
 		xl.Info("[%s] start proxy success", inMsg.ProxyName)
 	}
 }
@@ -278,7 +283,7 @@ func (ctl *Control) writer() {
 }
 
 // msgHandler handles all channel events and do corresponding operations.
-func (ctl *Control) msgHandler() {
+func (ctl *Control) msgHandler(frpcCallBack FRPCCallback) {
 	xl := ctl.xl
 	defer func() {
 		if err := recover(); err != nil {
@@ -322,7 +327,7 @@ func (ctl *Control) msgHandler() {
 			case *msg.ReqWorkConn:
 				go ctl.HandleReqWorkConn(m)
 			case *msg.NewProxyResp:
-				ctl.HandleNewProxyResp(m)
+				ctl.HandleNewProxyResp(m, frpcCallBack)
 			case *msg.Pong:
 				if m.Error != "" {
 					xl.Error("Pong contains error: %s", m.Error)
@@ -337,8 +342,8 @@ func (ctl *Control) msgHandler() {
 }
 
 // If controler is notified by closedCh, reader and writer and handler will exit
-func (ctl *Control) worker() {
-	go ctl.msgHandler()
+func (ctl *Control) worker(frpcCallBack FRPCCallback) {
+	go ctl.msgHandler(frpcCallBack)
 	go ctl.reader()
 	go ctl.writer()
 

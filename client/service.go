@@ -91,7 +91,7 @@ func (svr *Service) GetController() *Control {
 	return svr.ctl
 }
 
-func (svr *Service) Run() error {
+func (svr *Service) Run(frpcCallBack FRPCCallback) error {
 	xl := xlog.FromContextSafe(svr.ctx)
 
 	// login to frps
@@ -110,7 +110,7 @@ func (svr *Service) Run() error {
 		} else {
 			// login success
 			ctl := NewControl(svr.ctx, svr.runId, conn, session, svr.cfg, svr.pxyCfgs, svr.visitorCfgs, svr.serverUDPPort, svr.authSetter)
-			ctl.Run()
+			ctl.Run(frpcCallBack)
 			svr.ctlMu.Lock()
 			svr.ctl = ctl
 			svr.ctlMu.Unlock()
@@ -118,7 +118,7 @@ func (svr *Service) Run() error {
 		}
 	}
 
-	go svr.keepControllerWorking()
+	go svr.keepControllerWorking(frpcCallBack)
 
 	if svr.cfg.AdminPort != 0 {
 		// Init admin server assets
@@ -137,7 +137,7 @@ func (svr *Service) Run() error {
 	return nil
 }
 
-func (svr *Service) keepControllerWorking() {
+func (svr *Service) keepControllerWorking(frpcCallBack FRPCCallback) {
 	xl := xlog.FromContextSafe(svr.ctx)
 	maxDelayTime := 20 * time.Second
 	delayTime := time.Second
@@ -186,7 +186,7 @@ func (svr *Service) keepControllerWorking() {
 			delayTime = time.Second
 
 			ctl := NewControl(svr.ctx, svr.runId, conn, session, svr.cfg, svr.pxyCfgs, svr.visitorCfgs, svr.serverUDPPort, svr.authSetter)
-			ctl.Run()
+			ctl.Run(frpcCallBack)
 			svr.ctlMu.Lock()
 			if svr.ctl != nil {
 				svr.ctl.Close()
